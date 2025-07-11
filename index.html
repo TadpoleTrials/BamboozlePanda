@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bamboozle Panda</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            background: linear-gradient(to bottom, #87CEEB, #63B3ED);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #333;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            color: #2D3748;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 9/16;
+            max-height: 80vh;
+            background: #f7fafc;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+        
+        .ui-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        .score-display {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2D3748;
+            text-shadow: 1px 1px 2px white;
+            z-index: 5;
+        }
+        
+        .game-title {
+            font-size: 3.5rem;
+            margin-bottom: 10px;
+            color: #FFD700;
+            text-shadow: 0 0 10px rgba(0,0,0,0.8);
+        }
+        
+        .instructions {
+            text-align: center;
+            margin-bottom: 30px;
+            max-width: 80%;
+            line-height: 1.6;
+            font-size: 1.2rem;
+        }
+        
+        .btn {
+            background: linear-gradient(to bottom, #FFD700, #FFA500);
+            color: #2D3748;
+            border: none;
+            border-radius: 50px;
+            padding: 15px 40px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transition: all 0.2s ease;
+        }
+        
+        .btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        .final-score {
+            font-size: 4rem;
+            margin: 20px 0;
+            color: #FFD700;
+            text-shadow: 0 0 10px rgba(0,0,0,0.8);
+        }
+        
+        .game-over-text {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: #FF6B6B;
+            text-shadow: 0 0 10px rgba(0,0,0,0.8);
+        }
+        
+        .high-score {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #A0AEC0;
+        }
+        
+        .jump-buttons {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            padding: 0 10px;
+            z-index: 5;
+        }
+        
+        .jump-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2D3748;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            border: none;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .jump-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        @media (max-width: 500px) {
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .game-title {
+                font-size: 2.8rem;
+            }
+            
+            .instructions {
+                font-size: 1rem;
+            }
+            
+            .btn {
+                padding: 12px 30px;
+                font-size: 1.1rem;
+            }
+            
+            .jump-btn {
+                width: 70px;
+                height: 70px;
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bamboozle Panda</h1>
+        
+        <div class="game-container">
+            <canvas id="gameCanvas"></canvas>
+            <div class="score-display">Score: <span id="score">0</span></div>
+            
+            <div class="jump-buttons">
+                <button class="jump-btn" id="smallJumpBtn">1</button>
+                <button class="jump-btn" id="mediumJumpBtn">2</button>
+                <button class="jump-btn" id="largeJumpBtn">3</button>
+            </div>
+            
+            <div class="ui-overlay" id="startScreen">
+                <div class="game-title">Bamboozle Panda</div>
+                <div class="instructions">
+                    Jump over obstacles with the buttons!<br>
+                    1 = Small Jump<br>
+                    2 = Medium Jump<br>
+                    3 = Large Jump<br>
+                    Collect floating items for bonus points!
+                </div>
+                <button class="btn" id="startBtn">Start Game</button>
+            </div>
+            
+            <div class="ui-overlay" id="gameOverScreen">
+                <div class="game-over-text">You Got Bamboozled!</div>
+                <div class="final-score">Score: <span id="finalScore">0</span></div>
+                <div class="high-score">High Score: <span id="highScore">0</span></div>
+                <button class="btn" id="restartBtn">Tap to Retry</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game constants
+        const GRAVITY = 0.5;
+        const SMALL_JUMP_POWER = 10;
+        const MEDIUM_JUMP_POWER = 15;
+        const LARGE_JUMP_POWER = 20;
+        const PLAYER_SPEED_START = 3; // Start slower for easier beginning
+        const PLAYER_SPEED_MAX = 10; // Max speed as game progresses
+        const OBSTACLE_SPEED_START = 3;
+        const OBSTACLE_SPEED_MAX = 10;
+        const PLAYER_X_POSITION = 0.15; // Move player further left for better telegraphing
+        
+        // Game state
+        const gameState = {
+            player: {
+                x: 0,
+                y: 0,
+                vy: 0,
+                isJumping: false,
+                width: 40,
+                height: 60,
+                jumpType: null,
+                jumpFrame: 0
+            },
+            obstacles: [],
+            rewards: [],
+            gameOver: false,
+            score: 0,
+            highScore: 0,
+            lastFrameTime: 0,
+            animationFrameId: null,
+            obstacleTimer: 0,
+            rewardTimer: 0,
+            groundY: 0,
+            roadOffset: 0,
+            distance: 0,
+            difficulty: 1,
+            playerSpeed: PLAYER_SPEED_START,
+            obstacleSpeed: OBSTACLE_SPEED_START
+        };
+        
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const highScoreDisplay = document.getElementById('highScore');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const smallJumpBtn = document.getElementById('smallJumpBtn');
+        const mediumJumpBtn = document.getElementById('mediumJumpBtn');
+        const largeJumpBtn = document.getElementById('largeJumpBtn');
+        
+        // Initialize canvas size
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            gameState.groundY = canvas.height * 0.8;
+            gameState.player.x = canvas.width * PLAYER_X_POSITION;
+            gameState.player.y = gameState.groundY - gameState.player.height;
+        }
+        
+        // Initialize game
+        function initGame() {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Load high score
+            gameState.highScore = parseInt(localStorage.getItem('bamboozleHighScore')) || 0;
+            highScoreDisplay.textContent = gameState.highScore;
+            
+            // Set up event listeners
+            smallJumpBtn.addEventListener('click', () => jump('small'));
+            mediumJumpBtn.addEventListener('click', () => jump('medium'));
+            largeJumpBtn.addEventListener('click', () => jump('large'));
+            
+            // Keyboard controls
+            document.addEventListener('keydown', (e) => {
+                if (e.key === '1') jump('small');
+                if (e.key === '2') jump('medium');
+                if (e.key === '3') jump('large');
+            });
+            
+            startBtn.addEventListener('click', startGame);
+            restartBtn.addEventListener('click', startGame);
+            
+            // Show start screen
+            startScreen.classList.add('active');
+
+            // Draw panda on start screen
+            drawStartScreenPanda();
+        }
+        
+        // Start the game
+        function startGame() {
+            // Reset game state
+            gameState.player = {
+                x: canvas.width * PLAYER_X_POSITION,
+                y: gameState.groundY - 60,
+                vy: 0,
+                isJumping: false,
+                width: 40,
+                height: 60,
+                jumpType: null,
+                jumpFrame: 0
+            };
+            gameState.obstacles = [];
+            gameState.rewards = [];
+            gameState.gameOver = false;
+            gameState.score = 0;
+            gameState.obstacleTimer = 0;
+            gameState.rewardTimer = 0;
+            gameState.roadOffset = 0;
+            gameState.distance = 0;
+            gameState.difficulty = 1;
+            gameState.playerSpeed = PLAYER_SPEED_START;
+            gameState.obstacleSpeed = OBSTACLE_SPEED_START;
+
+            scoreDisplay.textContent = '0';
+
+            // Hide screens
+            startScreen.classList.remove('active');
+            gameOverScreen.classList.remove('active');
+
+            // Cancel any previous game loop
+            if (gameState.animationFrameId) {
+                cancelAnimationFrame(gameState.animationFrameId);
+                gameState.animationFrameId = null;
+            }
+
+            // Start game loop
+            gameState.lastFrameTime = performance.now();
+            gameState.animationFrameId = requestAnimationFrame(gameLoop);
+        }
+        
+        // Jump function
+        function jump(type) {
+            if (!gameState.gameOver && !gameState.player.isJumping) {
+                gameState.player.isJumping = true;
+                gameState.player.jumpType = type;
+                gameState.player.jumpFrame = 0;
+                
+                switch(type) {
+                    case 'small':
+                        gameState.player.vy = -SMALL_JUMP_POWER;
+                        break;
+                    case 'medium':
+                        gameState.player.vy = -MEDIUM_JUMP_POWER;
+                        break;
+                    case 'large':
+                        gameState.player.vy = -LARGE_JUMP_POWER;
+                        break;
+                }
+            }
+        }
+        
+        // Game loop
+        function gameLoop(timestamp) {
+            if (gameState.gameOver) return;
+            
+            // Calculate delta time for smooth animation
+            const deltaTime = timestamp - gameState.lastFrameTime;
+            gameState.lastFrameTime = timestamp;
+            
+            // Update game state
+            updateGame(deltaTime);
+            
+            // Draw everything
+            drawGame();
+            
+            // Continue game loop
+            gameState.animationFrameId = requestAnimationFrame(gameLoop);
+        }
+        
+        // Update game state
+        function updateGame(deltaTime) {
+            // Gradually increase speed up to max, smoothly and continuously
+            const speedProgress = Math.min(1, gameState.score / 3000); // Reaches max at score 3000
+            gameState.playerSpeed = PLAYER_SPEED_START + (PLAYER_SPEED_MAX - PLAYER_SPEED_START) * speedProgress;
+            gameState.obstacleSpeed = OBSTACLE_SPEED_START + (OBSTACLE_SPEED_MAX - OBSTACLE_SPEED_START) * speedProgress;
+
+            // Update player
+            updatePlayer(deltaTime);
+
+            // Update obstacles
+            updateObstacles(deltaTime);
+
+            // Update rewards
+            updateRewards(deltaTime);
+
+            // Spawn new obstacles
+            gameState.obstacleTimer += deltaTime;
+            // Make obstacle interval decrease more gradually as score increases
+            const obstacleInterval = Math.max(900, 2200 - gameState.score * 1.2); // Much slower ramp
+            if (gameState.obstacleTimer > obstacleInterval) {
+                gameState.obstacleTimer = 0;
+                spawnObstacle();
+            }
+
+            // Spawn new rewards
+            gameState.rewardTimer += deltaTime;
+            if (gameState.rewardTimer > 2500) { // Spawn every 2.5 seconds
+                gameState.rewardTimer = 0;
+                spawnReward();
+            }
+
+            // Update road offset
+            gameState.roadOffset = (gameState.roadOffset + gameState.obstacleSpeed) % 50;
+
+            // Update distance and score
+            gameState.distance += gameState.playerSpeed;
+            gameState.score = Math.floor(gameState.distance / 10);
+            scoreDisplay.textContent = gameState.score;
+
+            // Increase difficulty smoothly and continuously (no stepwise jumps)
+            gameState.difficulty = 1 + (gameState.score / 3000);
+        }
+        
+        // Update player position and state
+        function updatePlayer(deltaTime) {
+            // Apply gravity if jumping
+            if (gameState.player.isJumping) {
+                gameState.player.vy += GRAVITY;
+                gameState.player.y += gameState.player.vy;
+                gameState.player.jumpFrame++;
+                
+                // Check if landed
+                if (gameState.player.y >= gameState.groundY - gameState.player.height) {
+                    gameState.player.y = gameState.groundY - gameState.player.height;
+                    gameState.player.vy = 0;
+                    gameState.player.isJumping = false;
+                    gameState.player.jumpType = null;
+                }
+            }
+        }
+        
+        // Update obstacles
+        function updateObstacles(deltaTime) {
+            for (let i = gameState.obstacles.length - 1; i >= 0; i--) {
+                const obstacle = gameState.obstacles[i];
+                obstacle.x -= gameState.obstacleSpeed * gameState.difficulty;
+
+                // Check collision with player
+                if (checkCollision(
+                    gameState.player.x, gameState.player.y, gameState.player.width, gameState.player.height,
+                    obstacle.x, obstacle.y, obstacle.width, obstacle.height
+                )) {
+                    // Only collide if player is not above the obstacle
+                    if (gameState.player.y + gameState.player.height > obstacle.y + 10) {
+                        endGame();
+                        return;
+                    }
+                }
+
+                // Remove if off screen
+                if (obstacle.x + obstacle.width < 0) {
+                    gameState.obstacles.splice(i, 1);
+                }
+            }
+        }
+        
+        // Update rewards
+        function updateRewards(deltaTime) {
+            for (let i = gameState.rewards.length - 1; i >= 0; i--) {
+                const reward = gameState.rewards[i];
+                reward.x -= gameState.obstacleSpeed * gameState.difficulty;
+
+                // Check collision with player
+                if (checkCollision(
+                    gameState.player.x, gameState.player.y, gameState.player.width, gameState.player.height,
+                    reward.x, reward.y, reward.width, reward.height
+                )) {
+                    gameState.rewards.splice(i, 1);
+                    gameState.score += 10;
+                    scoreDisplay.textContent = gameState.score;
+                }
+
+                // Remove if off screen
+                if (reward.x + reward.width < 0) {
+                    gameState.rewards.splice(i, 1);
+                }
+            }
+        }
+        
+        // Spawn a new obstacle
+        function spawnObstacle() {
+            const types = ['log', 'pig', 'elephant', 'gap'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            
+            let width, height, y;
+            switch (type) {
+                case 'log':
+                    width = 60;
+                    height = 30;
+                    y = gameState.groundY - height;
+                    break;
+                case 'pig':
+                    width = 50;
+                    height = 40;
+                    y = gameState.groundY - height;
+                    break;
+                case 'elephant':
+                    width = 80;
+                    height = 70;
+                    y = gameState.groundY - height;
+                    break;
+                case 'gap':
+                    width = 70;
+                    height = 20;
+                    y = gameState.groundY;
+                    break;
+            }
+            
+            gameState.obstacles.push({
+                x: canvas.width,
+                y: y,
+                width: width,
+                height: height,
+                type: type,
+                frame: 0
+            });
+        }
+        
+        // Spawn a new reward
+        function spawnReward() {
+            const types = ['chopsticks', 'bamboo', 'panda'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            const heights = [gameState.groundY - 150, gameState.groundY - 200, gameState.groundY - 250];
+            const height = heights[Math.floor(Math.random() * heights.length)];
+            
+            gameState.rewards.push({
+                x: canvas.width,
+                y: height,
+                width: 30,
+                height: 30,
+                type: type,
+                frame: 0
+            });
+        }
+        
+        // Check collision between two rectangles
+        function checkCollision(x1, y1, w1, h1, x2, y2, w2, h2) {
+            return x1 < x2 + w2 &&
+                   x1 + w1 > x2 &&
+                   y1 < y2 + h2 &&
+                   y1 + h1 > y2;
+        }
+        
+        // End the game
+        function endGame() {
+            gameState.gameOver = true;
+            
+            // Update high score
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = gameState.score;
+                localStorage.setItem('bamboozleHighScore', gameState.highScore);
+            }
+            
+            // Show game over screen
+            finalScoreDisplay.textContent = gameState.score;
+            highScoreDisplay.textContent = gameState.highScore;
+            gameOverScreen.classList.add('active');
+        }
+        
+        // Draw the game
+        function drawGame() {
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+            
+            // Draw sky
+            drawSky();
+            
+            // Draw distant bamboo
+            drawBamboo();
+            
+            // Draw road
+            drawRoad();
+            
+            // Draw obstacles
+            drawObstacles();
+            
+            // Draw rewards
+            drawRewards();
+            
+            // Draw player
+            drawPlayer();
+        }
+        
+        // Draw sky background
+        function drawSky() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#63B3ED');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // Draw bamboo in background
+        function drawBamboo() {
+            const bambooCount = 10;
+            const bambooWidth = 15;
+            const segmentHeight = 20;
+
+            // Fainter, less saturated bamboo colors
+            const stalkColor = 'rgba(47, 133, 90, 0.18)'; // Faint green
+            const segmentColor = 'rgba(56, 161, 105, 0.13)';
+            const leafColor = 'rgba(72, 187, 120, 0.12)';
+
+            ctx.fillStyle = stalkColor;
+
+            for (let i = 0; i < bambooCount; i++) {
+                const x = (i * canvas.width / bambooCount) + (gameState.distance * 0.2) % (canvas.width / bambooCount);
+                const height = 80 + Math.sin(i * 2) * 20;
+                const y = gameState.groundY - height;
+
+                // Draw bamboo stalk
+                ctx.beginPath();
+                ctx.moveTo(x, gameState.groundY);
+                ctx.lineTo(x + bambooWidth, gameState.groundY);
+                ctx.lineTo(x + bambooWidth, y);
+                ctx.lineTo(x, y);
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw bamboo segments
+                ctx.fillStyle = segmentColor;
+                for (let j = 0; j < height / segmentHeight; j++) {
+                    const segmentY = gameState.groundY - (j * segmentHeight);
+                    ctx.fillRect(x, segmentY - segmentHeight, bambooWidth, 3);
+                }
+
+                // Draw bamboo leaves
+                ctx.fillStyle = leafColor;
+                drawBambooLeaf(x + bambooWidth / 2, y, 30, -Math.PI/4);
+                drawBambooLeaf(x + bambooWidth / 2, y + 20, 25, Math.PI/6);
+                drawBambooLeaf(x + bambooWidth / 2, y + 40, 35, -Math.PI/3);
+
+                ctx.fillStyle = stalkColor;
+            }
+        }
+        
+        // Draw bamboo leaf
+        function drawBambooLeaf(x, y, size, angle) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(size * 0.7, -size * 0.2, size, 0);
+            ctx.quadraticCurveTo(size * 0.7, size * 0.2, 0, 0);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        // Draw road
+        function drawRoad() {
+            // Road surface
+            ctx.fillStyle = '#4A5568';
+            ctx.fillRect(0, gameState.groundY, canvas.width, canvas.height - gameState.groundY);
+            
+            // Road markings
+            ctx.fillStyle = '#F7FAFC';
+            const markWidth = 20;
+            const markHeight = 5;
+            const markSpacing = 50;
+            
+            for (let i = -2; i < canvas.width / markSpacing + 2; i++) {
+                const x = (i * markSpacing + gameState.roadOffset) % (markSpacing * 2);
+                ctx.fillRect(x, gameState.groundY + 20, markWidth, markHeight);
+            }
+        }
+        
+        // Draw obstacles
+        function drawObstacles() {
+            gameState.obstacles.forEach(obstacle => {
+                obstacle.frame++;
+                
+                switch(obstacle.type) {
+                    case 'log':
+                        drawLog(obstacle);
+                        break;
+                    case 'pig':
+                        drawPig(obstacle);
+                        break;
+                    case 'elephant':
+                        drawElephant(obstacle);
+                        break;
+                    case 'gap':
+                        drawGap(obstacle);
+                        break;
+                }
+            });
+        }
+        
+        // Draw log obstacle
+        function drawLog(obstacle) {
+            ctx.save();
+            ctx.translate(obstacle.x + obstacle.width/2, obstacle.y + obstacle.height/2);
+            ctx.rotate(obstacle.frame * 0.05);
+            
+            // Log body
+            ctx.fillStyle = '#8B4513';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, obstacle.width/2, obstacle.height/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Log details
+            ctx.fillStyle = '#A0522D';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, obstacle.width/2 - 5, obstacle.height/2 - 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Log rings
+            ctx.strokeStyle = '#8B0000';
+            ctx.lineWidth = 2;
+            for (let i = -2; i <= 2; i++) {
+                ctx.beginPath();
+                ctx.ellipse(0, i * 8, obstacle.width/2 - 5, 2, 0, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            
+            ctx.restore();
+        }
+        
+        // Draw pig obstacle
+        function drawPig(obstacle) {
+            // Draw dust cloud if just spawned
+            if (obstacle.frame < 30) {
+                ctx.fillStyle = 'rgba(210, 180, 140, 0.7)';
+                ctx.beginPath();
+                ctx.arc(obstacle.x + obstacle.width, obstacle.y + obstacle.height, 
+                       obstacle.width * (1 - obstacle.frame/30), 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Pig body
+            ctx.fillStyle = '#FFC0CB';
+            ctx.beginPath();
+            ctx.ellipse(obstacle.x + obstacle.width/2, obstacle.y + obstacle.height/2, 
+                       obstacle.width/2, obstacle.height/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Pig head
+            ctx.beginPath();
+            ctx.ellipse(obstacle.x + obstacle.width/4, obstacle.y + obstacle.height/3, 
+                       obstacle.width/4, obstacle.height/3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Pig ears
+            ctx.beginPath();
+            ctx.ellipse(obstacle.x + obstacle.width/4 - 5, obstacle.y + obstacle.height/4, 
+                       5, 8, Math.PI/4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(obstacle.x + obstacle.width/4 + 5, obstacle.y + obstacle.height/4, 
+                       5, 8, -Math.PI/4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Pig snout
+            ctx.fillStyle = '#FF69B4';
+            ctx.beginPath();
+            ctx.arc(obstacle.x + obstacle.width/4, obstacle.y + obstacle.height/3, 
+                   5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Pig eyes
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(obstacle.x + obstacle.width/4 - 5, obstacle.y + obstacle.height/4, 
+                   2, 0, Math.PI * 2);
+            ctx.arc(obstacle.x + obstacle.width/4 + 5, obstacle.y + obstacle.height/4, 
+                   2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Pig legs
+            ctx.fillStyle = '#FFC0CB';
+            for (let i = 0; i < 4; i++) {
+                ctx.fillRect(obstacle.x + i * 15, obstacle.y + obstacle.height - 10, 8, 10);
+            }
+        }
+        
+        // Draw elephant obstacle
+        function drawElephant(obstacle) {
+            // Ground shake effect
+            if (obstacle.frame < 40) {
+                ctx.fillStyle = 'rgba(139, 69, 19, 0.3)';
+                ctx.beginPath();
+                ctx.ellipse(obstacle.x + obstacle.width/2, gameState.groundY, 
+                           obstacle.width * (1 - obstacle.frame/40), 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Elephant body
+            ctx.fillStyle = '#A9A9A9';
+            ctx.beginPath();
+            ctx.ellipse(obstacle.x + obstacle.width/2, obstacle.y + obstacle.height/2, 
+                       obstacle.width/2, obstacle.height/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Elephant head
+            ctx.beginPath();
+            ctx.ellipse(obstacle.x + obstacle.width/4, obstacle.y + obstacle.height/3, 
+                       obstacle.width/3, obstacle.height/3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Elephant trunk
+            ctx.beginPath();
+            ctx.moveTo(obstacle.x + obstacle.width/4 - 5, obstacle.y + obstacle.height/3);
+            ctx.bezierCurveTo(
+                obstacle.x + obstacle.width/4 - 20, obstacle.y + obstacle.height/3 + 10,
+                obstacle.x + obstacle.width/4 - 30, obstacle.y + obstacle.height/3 + 20,
+                obstacle.x + obstacle.width/4 - 20, obstacle.y + obstacle.height/3 + 30
+            );
+            ctx.bezierCurveTo(
+                obstacle.x + obstacle.width/4 - 10, obstacle.y + obstacle.height/3 + 25,
+                obstacle.x + obstacle.width/4 - 5, obstacle.y + obstacle.height/3 + 15,
+                obstacle.x + obstacle.width/4 - 5, obstacle.y + obstacle.height/3
+            );
+            ctx.fill();
+            
+            // Elephant ears
+            ctx.beginPath();
+            ctx.ellipse(obstacle.x + obstacle.width/4 - 10, obstacle.y + obstacle.height/4, 
+                       15, 20, Math.PI/4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Elephant legs
+            for (let i = 0; i < 4; i++) {
+                ctx.fillRect(obstacle.x + i * 20, obstacle.y + obstacle.height - 20, 15, 20);
+            }
+            
+            // Elephant eyes
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(obstacle.x + obstacle.width/4 - 5, obstacle.y + obstacle.height/4, 
+                   3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Draw gap obstacle
+        function drawGap(obstacle) {
+            // Shadow effect before gap
+            if (obstacle.x > canvas.width * 0.7) {
+                const shadowWidth = (obstacle.x - canvas.width * 0.7) / (canvas.width * 0.3) * 50;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(obstacle.x - shadowWidth, gameState.groundY, shadowWidth, 10);
+            }
+            
+            // The gap itself
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(obstacle.x, gameState.groundY, obstacle.width, 20);
+        }
+        
+        // Draw rewards
+        function drawRewards() {
+            gameState.rewards.forEach(reward => {
+                reward.frame++;
+                
+                switch(reward.type) {
+                    case 'chopsticks':
+                        drawChopsticks(reward);
+                        break;
+                    case 'bamboo':
+                        drawGlowingBamboo(reward);
+                        break;
+                    case 'panda':
+                        drawPandaPlush(reward);
+                        break;
+                }
+            });
+        }
+        
+        // Draw golden chopsticks
+        function drawChopsticks(reward) {
+            ctx.save();
+            ctx.translate(reward.x + reward.width/2, reward.y + reward.height/2);
+            ctx.rotate(reward.frame * 0.02);
+            
+            // Chopstick 1
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(-15, -2, 30, 4);
+            ctx.fillStyle = '#FFA500';
+            ctx.fillRect(-15, -2, 30, 1);
+            
+            // Chopstick 2
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(-12, 2, 30, 4);
+            ctx.fillStyle = '#FFA500';
+            ctx.fillRect(-12, 2, 30, 1);
+            
+            // Glow effect
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+            ctx.beginPath();
+            ctx.arc(0, 0, 20 + Math.sin(reward.frame * 0.1) * 5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        // Draw glowing bamboo
+        function drawGlowingBamboo(reward) {
+            ctx.save();
+            ctx.translate(reward.x + reward.width/2, reward.y + reward.height/2);
+            
+            // Bamboo stalk
+            ctx.fillStyle = '#00FF00';
+            ctx.fillRect(-5, -15, 10, 30);
+            
+            // Bamboo segments
+            ctx.fillStyle = '#00AA00';
+            for (let i = -3; i <= 3; i++) {
+                ctx.fillRect(-5, i * 5, 10, 1);
+            }
+            
+            // Glow effect
+            const glowAlpha = 0.2 + Math.sin(reward.frame * 0.1) * 0.1;
+            ctx.fillStyle = `rgba(0, 255, 0, ${glowAlpha})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, 20, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        // Draw panda plush
+        function drawPandaPlush(reward) {
+            ctx.save();
+            ctx.translate(reward.x + reward.width/2, reward.y + reward.height/2);
+            ctx.rotate(Math.sin(reward.frame * 0.05) * 0.2);
+            
+            // Body
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 15, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Head
+            ctx.beginPath();
+            ctx.arc(0, -12, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Ears
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(-6, -18, 4, 0, Math.PI * 2);
+            ctx.arc(6, -18, 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Eyes
+            ctx.beginPath();
+            ctx.arc(-3, -14, 2, 0, Math.PI * 2);
+            ctx.arc(3, -14, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Nose
+            ctx.beginPath();
+            ctx.arc(0, -10, 1, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Mouth
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(0, -8, 3, 0.2, Math.PI - 0.2);
+            ctx.stroke();
+            
+            // Arms and legs
+            ctx.fillStyle = 'black';
+            ctx.fillRect(-12, -5, 6, 3);
+            ctx.fillRect(6, -5, 6, 3);
+            ctx.fillRect(-10, 5, 5, 3);
+            ctx.fillRect(5, 5, 5, 3);
+            
+            ctx.restore();
+        }
+        
+        // Draw player
+        function drawPlayer() {
+            const player = gameState.player;
+            const isJumping = player.isJumping;
+            
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            
+            // Unicycle wheel
+            ctx.fillStyle = '#2D3748';
+            ctx.beginPath();
+            ctx.arc(player.width/2, player.height, 15, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Wheel rim
+            ctx.fillStyle = '#4A5568';
+            ctx.beginPath();
+            ctx.arc(player.width/2, player.height, 12, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Wheel spokes
+            ctx.strokeStyle = '#CBD5E0';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 8; i++) {
+                const angle = (i * Math.PI / 4) + (gameState.distance * 0.01);
+                ctx.beginPath();
+                ctx.moveTo(player.width/2, player.height);
+                ctx.lineTo(
+                    player.width/2 + Math.cos(angle) * 12,
+                    player.height + Math.sin(angle) * 12
+                );
+                ctx.stroke();
+            }
+            
+            // Wheel hub
+            ctx.fillStyle = '#E2E8F0';
+            ctx.beginPath();
+            ctx.arc(player.width/2, player.height, 5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Unicycle frame
+            ctx.fillStyle = '#2D3748';
+            ctx.fillRect(player.width/2 - 2, player.height - 30, 4, 30);
+            
+            // Seat
+            ctx.fillStyle = '#4A5568';
+            ctx.beginPath();
+            ctx.ellipse(player.width/2, player.height - 30, 8, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Panda body
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.ellipse(player.width/2, player.height - 50, 15, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Black patches
+            ctx.fillStyle = 'black';
+            
+            // Legs
+            ctx.fillRect(player.width/2 - 12, player.height - 30, 6, 20);
+            ctx.fillRect(player.width/2 + 6, player.height - 30, 6, 20);
+            
+            // Arms (animate when jumping)
+            const armAngle = isJumping ? Math.sin(player.jumpFrame * 0.2) * 0.5 : 0;
+            
+            // Left arm
+            ctx.save();
+            ctx.translate(player.width/2 - 12, player.height - 45);
+            ctx.rotate(-Math.PI/4 + armAngle);
+            ctx.fillRect(0, 0, 6, 25);
+            ctx.restore();
+            
+            // Right arm
+            ctx.save();
+            ctx.translate(player.width/2 + 12, player.height - 45);
+            ctx.rotate(Math.PI/4 - armAngle);
+            ctx.fillRect(0, 0, 6, 25);
+            ctx.restore();
+            
+            // Head
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(player.width/2, player.height - 70, 15, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Ears
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(player.width/2 - 10, player.height - 80, 6, 0, Math.PI * 2);
+            ctx.arc(player.width/2 + 10, player.height - 80, 6, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Eyes (change based on jump type)
+            ctx.fillStyle = 'black';
+            let eyeSize = 3;
+            let eyeY = player.height - 73;
+            let eyeOffset = 6;
+            
+            if (isJumping) {
+                eyeSize = 4;
+                if (player.jumpType === 'large') {
+                    // Excited eyes for big jump
+                    ctx.beginPath();
+                    ctx.arc(player.width/2 - eyeOffset, eyeY, eyeSize, 0, Math.PI);
+                    ctx.arc(player.width/2 + eyeOffset, eyeY, eyeSize, 0, Math.PI);
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(player.width/2 - eyeOffset - eyeSize, eyeY);
+                    ctx.lineTo(player.width/2 - eyeOffset + eyeSize, eyeY);
+                    ctx.moveTo(player.width/2 + eyeOffset - eyeSize, eyeY);
+                    ctx.lineTo(player.width/2 + eyeOffset + eyeSize, eyeY);
+                    ctx.stroke();
+                } else {
+                    // Normal jumping eyes
+                    ctx.beginPath();
+                    ctx.arc(player.width/2 - eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+                    ctx.arc(player.width/2 + eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            } else {
+                // Normal eyes
+                ctx.beginPath();
+                ctx.arc(player.width/2 - eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+                ctx.arc(player.width/2 + eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Nose
+            ctx.beginPath();
+            ctx.arc(player.width/2, player.height - 65, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Mouth (changes with jump state)
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            
+            if (isJumping) {
+                if (player.jumpType === 'large') {
+                    // Big smile for large jump
+                    ctx.arc(player.width/2, player.height - 60, 6, 0.2, Math.PI - 0.2);
+                } else {
+                    // Neutral mouth for other jumps
+                    ctx.moveTo(player.width/2 - 4, player.height - 60);
+                    ctx.lineTo(player.width/2 + 4, player.height - 60);
+                }
+            } else {
+                // Small smile when not jumping
+                ctx.arc(player.width/2, player.height - 62, 4, 0.2, Math.PI - 0.2);
+            }
+            ctx.stroke();
+            
+            // Jump effect if at peak of jump
+            if (isJumping && player.vy < -5) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.beginPath();
+                ctx.arc(player.width/2, player.height, 20 + (player.jumpFrame * 0.5), 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Fall animation if game over
+            if (gameState.gameOver) {
+                ctx.save();
+                ctx.translate(player.width/2, player.height);
+                ctx.rotate(Math.PI/2);
+                
+                // Fallen panda body
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.ellipse(0, -10, 20, 15, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Limbs
+                ctx.fillStyle = 'black';
+                ctx.fillRect(-20, -20, 6, 25);
+                ctx.fillRect(14, -20, 6, 25);
+                ctx.fillRect(-15, 0, 6, 20);
+                ctx.fillRect(9, 0, 6, 20);
+                
+                // Head
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(0, -25, 12, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Dizzy eyes
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(-5, -25, 2, 0, Math.PI * 2);
+                ctx.arc(5, -25, 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // X eyes
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(-8, -28);
+                ctx.lineTo(-2, -22);
+                ctx.moveTo(-2, -28);
+                ctx.lineTo(-8, -22);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(2, -28);
+                ctx.lineTo(8, -22);
+                ctx.moveTo(8, -28);
+                ctx.lineTo(2, -22);
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+            
+            ctx.restore();
+        }
+        
+        // Start the game
+        window.onload = initGame;
+        // Redraw panda if window is resized and start screen is visible
+        window.addEventListener('resize', function() {
+            if (startScreen.classList.contains('active')) {
+                drawStartScreenPanda();
+            }
+        });
+        // Redraw panda if start screen is shown again (after game over)
+        startScreen.addEventListener('transitionend', function() {
+            if (startScreen.classList.contains('active')) {
+                drawStartScreenPanda();
+            }
+        });
+        // Draw panda on start screen
+        function drawStartScreenPanda() {
+            const width = canvas.width;
+            const height = canvas.height;
+            ctx.clearRect(0, 0, width, height);
+            drawSky();
+            drawBamboo();
+            drawRoad();
+            // Draw panda in center, slightly above ground
+            ctx.save();
+            const pandaX = width * 0.5 - 20;
+            const pandaY = gameState.groundY - 60;
+            ctx.translate(pandaX, pandaY);
+            // Use the same drawing as drawPlayer, but static and centered
+            // Unicycle wheel
+            ctx.fillStyle = '#2D3748';
+            ctx.beginPath();
+            ctx.arc(20, 60, 15, 0, Math.PI * 2);
+            ctx.fill();
+            // Wheel rim
+            ctx.fillStyle = '#4A5568';
+            ctx.beginPath();
+            ctx.arc(20, 60, 12, 0, Math.PI * 2);
+            ctx.fill();
+            // Wheel spokes
+            ctx.strokeStyle = '#CBD5E0';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 8; i++) {
+                const angle = (i * Math.PI / 4);
+                ctx.beginPath();
+                ctx.moveTo(20, 60);
+                ctx.lineTo(
+                    20 + Math.cos(angle) * 12,
+                    60 + Math.sin(angle) * 12
+                );
+                ctx.stroke();
+            }
+            // Wheel hub
+            ctx.fillStyle = '#E2E8F0';
+            ctx.beginPath();
+            ctx.arc(20, 60, 5, 0, Math.PI * 2);
+            ctx.fill();
+            // Unicycle frame
+            ctx.fillStyle = '#2D3748';
+            ctx.fillRect(18, 30, 4, 30);
+            // Seat
+            ctx.fillStyle = '#4A5568';
+            ctx.beginPath();
+            ctx.ellipse(20, 30, 8, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Panda body
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.ellipse(20, 10, 15, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Black patches (legs)
+            ctx.fillStyle = 'black';
+            ctx.fillRect(8, 30, 6, 20);
+            ctx.fillRect(26, 30, 6, 20);
+            // Arms
+            ctx.save();
+            ctx.translate(8, -5);
+            ctx.rotate(-Math.PI/4);
+            ctx.fillRect(0, 0, 6, 25);
+            ctx.restore();
+            ctx.save();
+            ctx.translate(32, -5);
+            ctx.rotate(Math.PI/4);
+            ctx.fillRect(0, 0, 6, 25);
+            ctx.restore();
+            // Head
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(20, -10, 15, 0, Math.PI * 2);
+            ctx.fill();
+            // Ears
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(10, -20, 6, 0, Math.PI * 2);
+            ctx.arc(30, -20, 6, 0, Math.PI * 2);
+            ctx.fill();
+            // Eyes
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(14, -13, 3, 0, Math.PI * 2);
+            ctx.arc(26, -13, 3, 0, Math.PI * 2);
+            ctx.fill();
+            // Nose
+            ctx.beginPath();
+            ctx.arc(20, -5, 2, 0, Math.PI * 2);
+            ctx.fill();
+            // Smile
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(20, 0, 4, 0.2, Math.PI - 0.2);
+            ctx.stroke();
+            ctx.restore();
+        }
+    </script>
+</body>
+</html>
