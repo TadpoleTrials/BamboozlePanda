@@ -248,11 +248,11 @@
         const SMALL_JUMP_POWER = 10;
         const MEDIUM_JUMP_POWER = 15;
         const LARGE_JUMP_POWER = 20;
-        const PLAYER_SPEED_START = 3; // Start slower for easier beginning
-        const PLAYER_SPEED_MAX = 10; // Max speed as game progresses
+        const PLAYER_SPEED_START = 3;
+        const PLAYER_SPEED_MAX = 10;
         const OBSTACLE_SPEED_START = 3;
         const OBSTACLE_SPEED_MAX = 10;
-        const PLAYER_X_POSITION = 0.15; // Move player further left for better telegraphing
+        const PLAYER_X_POSITION = 0.15;
         
         // Game state
         const gameState = {
@@ -280,7 +280,11 @@
             distance: 0,
             difficulty: 1,
             playerSpeed: PLAYER_SPEED_START,
-            obstacleSpeed: OBSTACLE_SPEED_START
+            obstacleSpeed: OBSTACLE_SPEED_START,
+            crashEffects: [],
+            crashIntensity: 0,
+            gameDuration: 0,
+            showGameOverScreen: false
         };
         
         // Canvas setup
@@ -361,6 +365,10 @@
             gameState.difficulty = 1;
             gameState.playerSpeed = PLAYER_SPEED_START;
             gameState.obstacleSpeed = OBSTACLE_SPEED_START;
+            gameState.crashEffects = [];
+            gameState.crashIntensity = 0;
+            gameState.gameDuration = 0;
+            gameState.showGameOverScreen = false;
 
             scoreDisplay.textContent = '0';
 
@@ -401,27 +409,38 @@
         }
         
         // Game loop
-        function gameLoop(timestamp) {
-            if (gameState.gameOver) return;
-            
-            // Calculate delta time for smooth animation
-            const deltaTime = timestamp - gameState.lastFrameTime;
-            gameState.lastFrameTime = timestamp;
-            
-            // Update game state
-            updateGame(deltaTime);
-            
-            // Draw everything
-            drawGame();
-            
-            // Continue game loop
-            gameState.animationFrameId = requestAnimationFrame(gameLoop);
+function gameLoop(timestamp) {
+    if (gameState.gameOver) {
+        updateCrashEffects();
+        drawGame();
+        if (!gameState.showGameOverScreen && gameState.crashEffects.length === 0) {
+            gameOverScreen.classList.add('active');
+            gameState.showGameOverScreen = true;
         }
+        // Continue the game loop even when game is over to show effects
+        gameState.animationFrameId = requestAnimationFrame(gameLoop);
+        return;
+    }
+    
+    // Calculate delta time for smooth animation
+    const deltaTime = timestamp - gameState.lastFrameTime;
+    gameState.lastFrameTime = timestamp;
+    gameState.gameDuration += deltaTime;
+    
+    // Update game state
+    updateGame(deltaTime);
+    
+    // Draw everything
+    drawGame();
+    
+    // Continue game loop
+    gameState.animationFrameId = requestAnimationFrame(gameLoop);
+}
         
         // Update game state
         function updateGame(deltaTime) {
-            // Gradually increase speed up to max, smoothly and continuously
-            const speedProgress = Math.min(1, gameState.score / 3000); // Reaches max at score 3000
+            // Gradually increase speed up to max
+            const speedProgress = Math.min(1, gameState.score / 3000);
             gameState.playerSpeed = PLAYER_SPEED_START + (PLAYER_SPEED_MAX - PLAYER_SPEED_START) * speedProgress;
             gameState.obstacleSpeed = OBSTACLE_SPEED_START + (OBSTACLE_SPEED_MAX - OBSTACLE_SPEED_START) * speedProgress;
 
@@ -436,8 +455,7 @@
 
             // Spawn new obstacles
             gameState.obstacleTimer += deltaTime;
-            // Make obstacle interval decrease more gradually as score increases
-            const obstacleInterval = Math.max(900, 2200 - gameState.score * 1.2); // Much slower ramp
+            const obstacleInterval = Math.max(900, 2200 - gameState.score * 1.2);
             if (gameState.obstacleTimer > obstacleInterval) {
                 gameState.obstacleTimer = 0;
                 spawnObstacle();
@@ -445,7 +463,7 @@
 
             // Spawn new rewards
             gameState.rewardTimer += deltaTime;
-            if (gameState.rewardTimer > 2500) { // Spawn every 2.5 seconds
+            if (gameState.rewardTimer > 2500) {
                 gameState.rewardTimer = 0;
                 spawnReward();
             }
@@ -458,13 +476,12 @@
             gameState.score = Math.floor(gameState.distance / 10);
             scoreDisplay.textContent = gameState.score;
 
-            // Increase difficulty smoothly and continuously (no stepwise jumps)
+            // Increase difficulty
             gameState.difficulty = 1 + (gameState.score / 3000);
         }
         
         // Update player position and state
         function updatePlayer(deltaTime) {
-            // Apply gravity if jumping
             if (gameState.player.isJumping) {
                 gameState.player.vy += GRAVITY;
                 gameState.player.y += gameState.player.vy;
@@ -487,14 +504,25 @@
                 obstacle.x -= gameState.obstacleSpeed * gameState.difficulty;
 
                 // Check collision with player
-                if (checkCollision(
-                    gameState.player.x, gameState.player.y, gameState.player.width, gameState.player.height,
-                    obstacle.x, obstacle.y, obstacle.width, obstacle.height
-                )) {
-                    // Only collide if player is not above the obstacle
-                    if (gameState.player.y + gameState.player.height > obstacle.y + 10) {
+                if (obstacle.type === 'gap') {
+                    const playerCenterX = gameState.player.x + gameState.player.width / 2;
+                    const playerFeetY = gameState.player.y + gameState.player.height;
+                    if (
+                        playerCenterX > obstacle.x &&
+                        playerCenterX < obstacle.x + obstacle.width &&
+                        !gameState.player.isJumping &&
+                        Math.abs(playerFeetY - gameState.groundY) < 2
+                    ) {
                         endGame();
-                        return;
+                    }
+                } else {
+                    if (checkCollision(
+                        gameState.player.x, gameState.player.y, gameState.player.width, gameState.player.height,
+                        obstacle.x, obstacle.y, obstacle.width, obstacle.height
+                    )) {
+                        if (gameState.player.y + gameState.player.height > obstacle.y + 10) {
+                            endGame();
+                        }
                     }
                 }
 
@@ -593,19 +621,140 @@
         }
         
         // End the game
-        function endGame() {
-            gameState.gameOver = true;
+function endGame() {
+    gameState.gameOver = true;
+    
+    // Calculate crash intensity based on game duration and speed
+    gameState.crashIntensity = Math.min(1, gameState.gameDuration / 30000) * 0.8 + 
+                              Math.min(1, gameState.obstacleSpeed / OBSTACLE_SPEED_MAX) * 0.4;
+    
+    // Create crash particles based on intensity
+    createCrashParticles();
+    
+    // Update high score
+    if (gameState.score > gameState.highScore) {
+        gameState.highScore = gameState.score;
+        localStorage.setItem('bamboozleHighScore', gameState.highScore);
+    }
+    
+    // Prepare game over screen but do not show yet
+    finalScoreDisplay.textContent = gameState.score;
+    highScoreDisplay.textContent = gameState.highScore;
+    gameState.showGameOverScreen = false;
+    
+    // Force show game over screen if no crash effects were created
+    if (gameState.crashEffects.length === 0) {
+        gameOverScreen.classList.add('active');
+        gameState.showGameOverScreen = true;
+    }
+}
+
+        // Create crash particles
+        function createCrashParticles() {
+            const particleCount = 20 + Math.floor(50 * gameState.crashIntensity);
+            const playerCenterX = gameState.player.x + gameState.player.width/2;
+            const playerCenterY = gameState.player.y + gameState.player.height/2;
             
-            // Update high score
-            if (gameState.score > gameState.highScore) {
-                gameState.highScore = gameState.score;
-                localStorage.setItem('bamboozleHighScore', gameState.highScore);
+            for (let i = 0; i < particleCount; i++) {
+                const size = 2 + Math.random() * 8 * gameState.crashIntensity;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 1 + Math.random() * 10 * gameState.crashIntensity;
+                
+                gameState.crashEffects.push({
+                    x: playerCenterX,
+                    y: playerCenterY,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: size,
+                    color: i % 2 === 0 ? 'white' : 'black',
+                    rotation: Math.random() * Math.PI * 2,
+                    rotationSpeed: (Math.random() - 0.5) * 0.2,
+                    gravity: 0.1,
+                    life: 100 + Math.random() * 100,
+                    type: Math.random() > 0.7 ? 'bamboo' : 'panda'
+                });
             }
             
-            // Show game over screen
-            finalScoreDisplay.textContent = gameState.score;
-            highScoreDisplay.textContent = gameState.highScore;
-            gameOverScreen.classList.add('active');
+            // Add larger debris for more intense crashes
+            if (gameState.crashIntensity > 0.5) {
+                const debrisCount = 3 + Math.floor(5 * gameState.crashIntensity);
+                for (let i = 0; i < debrisCount; i++) {
+                    gameState.crashEffects.push({
+                        x: playerCenterX,
+                        y: playerCenterY,
+                        vx: (Math.random() - 0.5) * 8,
+                        vy: (Math.random() - 0.5) * 8 - 2,
+                        size: 10 + Math.random() * 20,
+                        color: '#4A5568',
+                        rotation: Math.random() * Math.PI * 2,
+                        rotationSpeed: (Math.random() - 0.5) * 0.1,
+                        gravity: 0.2,
+                        life: 150 + Math.random() * 100,
+                        type: 'debris'
+                    });
+                }
+            }
+        }
+
+        // Update crash particles
+        function updateCrashEffects() {
+            for (let i = gameState.crashEffects.length - 1; i >= 0; i--) {
+                const p = gameState.crashEffects[i];
+                
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += p.gravity;
+                p.rotation += p.rotationSpeed;
+                p.life--;
+                
+                if (p.life <= 0 || p.y > canvas.height + 50) {
+                    gameState.crashEffects.splice(i, 1);
+                }
+            }
+        }
+
+        // Draw crash particles
+        function drawCrashEffects() {
+            gameState.crashEffects.forEach(p => {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation);
+                
+                if (p.type === 'bamboo') {
+                    // Draw bamboo particle
+                    ctx.fillStyle = '#00AA00';
+                    ctx.fillRect(-p.size/2, -p.size, p.size, p.size*2);
+                    ctx.fillStyle = '#007700';
+                    for (let i = -1; i <= 1; i++) {
+                        ctx.fillRect(-p.size/2, i*p.size/2, p.size, 1);
+                    }
+                } else if (p.type === 'debris') {
+                    // Draw unicycle debris
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, p.size/2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#E2E8F0';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, p.size/3, 0, Math.PI * 2);
+                    ctx.stroke();
+                } else {
+                    // Regular panda particle
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    if (Math.random() > 0.5) {
+                        // Round particle
+                        ctx.arc(0, 0, p.size/2, 0, Math.PI * 2);
+                    } else {
+                        // Angular particle
+                        ctx.rect(-p.size/2, -p.size/2, p.size, p.size);
+                    }
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            });
         }
         
         // Draw the game
@@ -633,6 +782,11 @@
             
             // Draw player
             drawPlayer();
+            
+            // Draw crash effects on top of everything
+            if (gameState.gameOver) {
+                drawCrashEffects();
+            }
         }
         
         // Draw sky background
@@ -651,8 +805,7 @@
             const bambooWidth = 15;
             const segmentHeight = 20;
 
-            // Fainter, less saturated bamboo colors
-            const stalkColor = 'rgba(47, 133, 90, 0.18)'; // Faint green
+            const stalkColor = 'rgba(47, 133, 90, 0.18)';
             const segmentColor = 'rgba(56, 161, 105, 0.13)';
             const leafColor = 'rgba(72, 187, 120, 0.12)';
 
@@ -1029,259 +1182,224 @@
         
         // Draw player
         function drawPlayer() {
-            const player = gameState.player;
-            const isJumping = player.isJumping;
+            var player = gameState.player;
+            var isJumping = player.isJumping;
             
+            // Don't draw normal player if game over and crash effects are active
+            if (gameState.gameOver && gameState.crashEffects.length > 10) {
+                return;
+            }
+            
+            var armAngle = isJumping ? Math.sin(player.jumpFrame * 0.2) * 0.5 : 0;
+            var eyeSize = 3;
+            var eyeY = player.height - 73;
+            var eyeOffset = 8;
             ctx.save();
             ctx.translate(player.x, player.y);
             
-            // Unicycle wheel
-            ctx.fillStyle = '#2D3748';
-            ctx.beginPath();
-            ctx.arc(player.width/2, player.height, 15, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Wheel rim
-            ctx.fillStyle = '#4A5568';
-            ctx.beginPath();
-            ctx.arc(player.width/2, player.height, 12, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Wheel spokes
-            ctx.strokeStyle = '#CBD5E0';
-            ctx.lineWidth = 1;
-            for (let i = 0; i < 8; i++) {
-                const angle = (i * Math.PI / 4) + (gameState.distance * 0.01);
+            if (gameState.gameOver) {
+                // Fallen panda animation
+                ctx.save();
+                ctx.translate(player.width/2, player.height);
+                ctx.rotate(Math.PI/2);
+                ctx.fillStyle = 'white';
                 ctx.beginPath();
-                ctx.moveTo(player.width/2, player.height);
-                ctx.lineTo(
-                    player.width/2 + Math.cos(angle) * 12,
-                    player.height + Math.sin(angle) * 12
-                );
+                ctx.ellipse(0, -10, 28, 20, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.fillRect(-28, -20, 12, 30);
+                ctx.fillRect(16, -20, 12, 30);
+                ctx.fillRect(-20, 0, 12, 24);
+                ctx.fillRect(8, 0, 12, 24);
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(0, -25, 18, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(-8, -25, 3, 0, Math.PI * 2);
+                ctx.arc(8, -25, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(-13, -28);
+                ctx.lineTo(-3, -22);
+                ctx.moveTo(-3, -28);
+                ctx.lineTo(-13, -22);
                 ctx.stroke();
-            }
-            
-            // Wheel hub
-            ctx.fillStyle = '#E2E8F0';
-            ctx.beginPath();
-            ctx.arc(player.width/2, player.height, 5, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Unicycle frame
-            ctx.fillStyle = '#2D3748';
-            ctx.fillRect(player.width/2 - 2, player.height - 30, 4, 30);
-            
-            // Seat
-            ctx.fillStyle = '#4A5568';
-            ctx.beginPath();
-            ctx.ellipse(player.width/2, player.height - 30, 8, 4, 0, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Panda body
-            ctx.fillStyle = 'white';
-            ctx.beginPath();
-            ctx.ellipse(player.width/2, player.height - 50, 15, 20, 0, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Black patches
-            ctx.fillStyle = 'black';
-            
-            // Legs
-            ctx.fillRect(player.width/2 - 12, player.height - 30, 6, 20);
-            ctx.fillRect(player.width/2 + 6, player.height - 30, 6, 20);
-            
-            // Arms (animate when jumping)
-            const armAngle = isJumping ? Math.sin(player.jumpFrame * 0.2) * 0.5 : 0;
-            
-            // Left arm
-            ctx.save();
-            ctx.translate(player.width/2 - 12, player.height - 45);
-            ctx.rotate(-Math.PI/4 + armAngle);
-            ctx.fillRect(0, 0, 6, 25);
-            ctx.restore();
-            
-            // Right arm
-            ctx.save();
-            ctx.translate(player.width/2 + 12, player.height - 45);
-            ctx.rotate(Math.PI/4 - armAngle);
-            ctx.fillRect(0, 0, 6, 25);
-            ctx.restore();
-            
-            // Head
-            ctx.fillStyle = 'white';
-            ctx.beginPath();
-            ctx.arc(player.width/2, player.height - 70, 15, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Ears
-            ctx.fillStyle = 'black';
-            ctx.beginPath();
-            ctx.arc(player.width/2 - 10, player.height - 80, 6, 0, Math.PI * 2);
-            ctx.arc(player.width/2 + 10, player.height - 80, 6, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Eyes (change based on jump type)
-            ctx.fillStyle = 'black';
-            let eyeSize = 3;
-            let eyeY = player.height - 73;
-            let eyeOffset = 6;
-            
-            if (isJumping) {
-                eyeSize = 4;
-                if (player.jumpType === 'large') {
-                    // Excited eyes for big jump
+                ctx.beginPath();
+                ctx.moveTo(3, -28);
+                ctx.lineTo(13, -22);
+                ctx.moveTo(13, -28);
+                ctx.lineTo(3, -22);
+                ctx.stroke();
+                ctx.restore();
+            } else {
+                // Unicycle wheel
+                ctx.fillStyle = '#2D3748';
+                ctx.beginPath();
+                ctx.arc(player.width/2, player.height, 15, 0, Math.PI * 2);
+                ctx.fill();
+                // Wheel rim
+                ctx.fillStyle = '#4A5568';
+                ctx.beginPath();
+                ctx.arc(player.width/2, player.height, 12, 0, Math.PI * 2);
+                ctx.fill();
+                // Wheel spokes
+                ctx.strokeStyle = '#CBD5E0';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i * Math.PI / 4) + (gameState.distance * 0.01);
                     ctx.beginPath();
-                    ctx.arc(player.width/2 - eyeOffset, eyeY, eyeSize, 0, Math.PI);
-                    ctx.arc(player.width/2 + eyeOffset, eyeY, eyeSize, 0, Math.PI);
-                    ctx.fill();
-                    
-                    ctx.beginPath();
-                    ctx.moveTo(player.width/2 - eyeOffset - eyeSize, eyeY);
-                    ctx.lineTo(player.width/2 - eyeOffset + eyeSize, eyeY);
-                    ctx.moveTo(player.width/2 + eyeOffset - eyeSize, eyeY);
-                    ctx.lineTo(player.width/2 + eyeOffset + eyeSize, eyeY);
+                    ctx.moveTo(player.width/2, player.height);
+                    ctx.lineTo(
+                        player.width/2 + Math.cos(angle) * 12,
+                        player.height + Math.sin(angle) * 12
+                    );
                     ctx.stroke();
+                }
+                // Wheel hub
+                ctx.fillStyle = '#E2E8F0';
+                ctx.beginPath();
+                ctx.arc(player.width/2, player.height, 5, 0, Math.PI * 2);
+                ctx.fill();
+                // Unicycle frame
+                ctx.fillStyle = '#2D3748';
+                ctx.fillRect(player.width/2 - 2, player.height - 30, 4, 30);
+                // Seat
+                ctx.fillStyle = '#4A5568';
+                ctx.beginPath();
+                ctx.ellipse(player.width/2, player.height - 30, 10, 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Panda body (chubbier)
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.ellipse(player.width/2, player.height - 50, 20, 28, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Black patches
+                ctx.fillStyle = 'black';
+                // Legs (thicker)
+                ctx.fillRect(player.width/2 - 16, player.height - 30, 10, 24);
+                ctx.fillRect(player.width/2 + 6, player.height - 30, 10, 24);
+                // Arms (thicker, animate when jumping)
+                // Left arm
+                ctx.save();
+                ctx.translate(player.width/2 - 16, player.height - 45);
+                ctx.rotate(-Math.PI/4 + armAngle);
+                ctx.fillRect(0, 0, 10, 30);
+                ctx.restore();
+                // Right arm
+                ctx.save();
+                ctx.translate(player.width/2 + 16, player.height - 45);
+                ctx.rotate(Math.PI/4 - armAngle);
+                ctx.fillRect(0, 0, 10, 30);
+                ctx.restore();
+                // Head (chubbier)
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(player.width/2, player.height - 70, 20, 0, Math.PI * 2);
+                ctx.fill();
+                // Ears (slightly bigger)
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(player.width/2 - 13, player.height - 80, 8, 0, Math.PI * 2);
+                ctx.arc(player.width/2 + 13, player.height - 80, 8, 0, Math.PI * 2);
+                ctx.fill();
+                // Cheeks (rounder)
+                ctx.fillStyle = '#FFD1DC';
+                ctx.beginPath();
+                ctx.arc(player.width/2 - 9, player.height - 62, 5, 0, Math.PI * 2);
+                ctx.arc(player.width/2 + 9, player.height - 62, 5, 0, Math.PI * 2);
+                ctx.fill();
+                // Eyes (change based on jump type)
+                ctx.fillStyle = 'black';
+                if (isJumping) {
+                    eyeSize = 4;
+                    if (player.jumpType === 'large') {
+                        // Excited eyes for big jump
+                        ctx.beginPath();
+                        ctx.arc(player.width/2 - eyeOffset, eyeY, eyeSize, 0, Math.PI);
+                        ctx.arc(player.width/2 + eyeOffset, eyeY, eyeSize, 0, Math.PI);
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.moveTo(player.width/2 - eyeOffset - eyeSize, eyeY);
+                        ctx.lineTo(player.width/2 - eyeOffset + eyeSize, eyeY);
+                        ctx.moveTo(player.width/2 + eyeOffset - eyeSize, eyeY);
+                        ctx.lineTo(player.width/2 + eyeOffset + eyeSize, eyeY);
+                        ctx.stroke();
+                    } else {
+                        // Normal jumping eyes
+                        ctx.beginPath();
+                        ctx.arc(player.width/2 - eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+                        ctx.arc(player.width/2 + eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
                 } else {
-                    // Normal jumping eyes
+                    // Normal eyes
                     ctx.beginPath();
                     ctx.arc(player.width/2 - eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
                     ctx.arc(player.width/2 + eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
                     ctx.fill();
                 }
-            } else {
-                // Normal eyes
+                // Nose
                 ctx.beginPath();
-                ctx.arc(player.width/2 - eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
-                ctx.arc(player.width/2 + eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+                ctx.arc(player.width/2, player.height - 65, 2.5, 0, Math.PI * 2);
                 ctx.fill();
-            }
-            
-            // Nose
-            ctx.beginPath();
-            ctx.arc(player.width/2, player.height - 65, 2, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Mouth (changes with jump state)
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            
-            if (isJumping) {
-                if (player.jumpType === 'large') {
-                    // Big smile for large jump
-                    ctx.arc(player.width/2, player.height - 60, 6, 0.2, Math.PI - 0.2);
-                } else {
-                    // Neutral mouth for other jumps
-                    ctx.moveTo(player.width/2 - 4, player.height - 60);
-                    ctx.lineTo(player.width/2 + 4, player.height - 60);
-                }
-            } else {
-                // Small smile when not jumping
-                ctx.arc(player.width/2, player.height - 62, 4, 0.2, Math.PI - 0.2);
-            }
-            ctx.stroke();
-            
-            // Jump effect if at peak of jump
-            if (isJumping && player.vy < -5) {
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.beginPath();
-                ctx.arc(player.width/2, player.height, 20 + (player.jumpFrame * 0.5), 0, Math.PI * 2);
-                ctx.fill();
-            }
-            
-            // Fall animation if game over
-            if (gameState.gameOver) {
-                ctx.save();
-                ctx.translate(player.width/2, player.height);
-                ctx.rotate(Math.PI/2);
-                
-                // Fallen panda body
-                ctx.fillStyle = 'white';
-                ctx.beginPath();
-                ctx.ellipse(0, -10, 20, 15, 0, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Limbs
-                ctx.fillStyle = 'black';
-                ctx.fillRect(-20, -20, 6, 25);
-                ctx.fillRect(14, -20, 6, 25);
-                ctx.fillRect(-15, 0, 6, 20);
-                ctx.fillRect(9, 0, 6, 20);
-                
-                // Head
-                ctx.fillStyle = 'white';
-                ctx.beginPath();
-                ctx.arc(0, -25, 12, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Dizzy eyes
-                ctx.fillStyle = 'black';
-                ctx.beginPath();
-                ctx.arc(-5, -25, 2, 0, Math.PI * 2);
-                ctx.arc(5, -25, 2, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // X eyes
+                // Mouth (changes with jump state)
                 ctx.strokeStyle = 'black';
                 ctx.lineWidth = 1.5;
                 ctx.beginPath();
-                ctx.moveTo(-8, -28);
-                ctx.lineTo(-2, -22);
-                ctx.moveTo(-2, -28);
-                ctx.lineTo(-8, -22);
+                if (isJumping) {
+                    if (player.jumpType === 'large') {
+                        // Big smile for large jump
+                        ctx.arc(player.width/2, player.height - 60, 7, 0.2, Math.PI - 0.2);
+                    } else {
+                        // Neutral mouth for other jumps
+                        ctx.moveTo(player.width/2 - 5, player.height - 60);
+                        ctx.lineTo(player.width/2 + 5, player.height - 60);
+                    }
+                } else {
+                    // Small smile when not jumping
+                    ctx.arc(player.width/2, player.height - 62, 5, 0.2, Math.PI - 0.2);
+                }
                 ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(2, -28);
-                ctx.lineTo(8, -22);
-                ctx.moveTo(8, -28);
-                ctx.lineTo(2, -22);
-                ctx.stroke();
-                
-                ctx.restore();
+                // Jump effect if at peak of jump
+                if (isJumping && player.vy < -5) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(player.width/2, player.height, 22 + (player.jumpFrame * 0.5), 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
-            
             ctx.restore();
         }
-        
-        // Start the game
-        window.onload = initGame;
-        // Redraw panda if window is resized and start screen is visible
-        window.addEventListener('resize', function() {
-            if (startScreen.classList.contains('active')) {
-                drawStartScreenPanda();
-            }
-        });
-        // Redraw panda if start screen is shown again (after game over)
-        startScreen.addEventListener('transitionend', function() {
-            if (startScreen.classList.contains('active')) {
-                drawStartScreenPanda();
-            }
-        });
+
         // Draw panda on start screen
         function drawStartScreenPanda() {
-            const width = canvas.width;
-            const height = canvas.height;
-            ctx.clearRect(0, 0, width, height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawSky();
             drawBamboo();
             drawRoad();
+            
             // Draw panda in center, slightly above ground
             ctx.save();
-            const pandaX = width * 0.5 - 20;
+            const pandaX = canvas.width * 0.5 - 20;
             const pandaY = gameState.groundY - 60;
             ctx.translate(pandaX, pandaY);
-            // Use the same drawing as drawPlayer, but static and centered
+            
             // Unicycle wheel
             ctx.fillStyle = '#2D3748';
             ctx.beginPath();
             ctx.arc(20, 60, 15, 0, Math.PI * 2);
             ctx.fill();
+            
             // Wheel rim
             ctx.fillStyle = '#4A5568';
             ctx.beginPath();
             ctx.arc(20, 60, 12, 0, Math.PI * 2);
             ctx.fill();
+            
             // Wheel spokes
             ctx.strokeStyle = '#CBD5E0';
             ctx.lineWidth = 1;
@@ -1295,68 +1413,91 @@
                 );
                 ctx.stroke();
             }
+            
             // Wheel hub
             ctx.fillStyle = '#E2E8F0';
             ctx.beginPath();
             ctx.arc(20, 60, 5, 0, Math.PI * 2);
             ctx.fill();
+            
             // Unicycle frame
             ctx.fillStyle = '#2D3748';
             ctx.fillRect(18, 30, 4, 30);
+            
             // Seat
             ctx.fillStyle = '#4A5568';
             ctx.beginPath();
-            ctx.ellipse(20, 30, 8, 4, 0, 0, Math.PI * 2);
+            ctx.ellipse(20, 30, 10, 5, 0, 0, Math.PI * 2);
             ctx.fill();
-            // Panda body
+            
+            // Panda body (chubbier)
             ctx.fillStyle = 'white';
             ctx.beginPath();
-            ctx.ellipse(20, 10, 15, 20, 0, 0, Math.PI * 2);
+            ctx.ellipse(20, 10, 20, 28, 0, 0, Math.PI * 2);
             ctx.fill();
-            // Black patches (legs)
+            
+            // Black patches (legs thicker)
             ctx.fillStyle = 'black';
-            ctx.fillRect(8, 30, 6, 20);
-            ctx.fillRect(26, 30, 6, 20);
-            // Arms
+            ctx.fillRect(4, 30, 12, 24);
+            ctx.fillRect(24, 30, 12, 24);
+            
+            // Arms (thicker)
             ctx.save();
-            ctx.translate(8, -5);
+            ctx.translate(4, -5);
             ctx.rotate(-Math.PI/4);
-            ctx.fillRect(0, 0, 6, 25);
+            ctx.fillRect(0, 0, 12, 32);
             ctx.restore();
+            
             ctx.save();
-            ctx.translate(32, -5);
+            ctx.translate(36, -5);
             ctx.rotate(Math.PI/4);
-            ctx.fillRect(0, 0, 6, 25);
+            ctx.fillRect(0, 0, 12, 32);
             ctx.restore();
-            // Head
+            
+            // Head (chubbier)
             ctx.fillStyle = 'white';
             ctx.beginPath();
-            ctx.arc(20, -10, 15, 0, Math.PI * 2);
+            ctx.arc(20, -10, 20, 0, Math.PI * 2);
             ctx.fill();
-            // Ears
+            
+            // Ears (slightly bigger)
             ctx.fillStyle = 'black';
             ctx.beginPath();
-            ctx.arc(10, -20, 6, 0, Math.PI * 2);
-            ctx.arc(30, -20, 6, 0, Math.PI * 2);
+            ctx.arc(7, -20, 9, 0, Math.PI * 2);
+            ctx.arc(33, -20, 9, 0, Math.PI * 2);
             ctx.fill();
+            
+            // Cheeks (rounder)
+            ctx.fillStyle = '#FFD1DC';
+            ctx.beginPath();
+            ctx.arc(12, -2, 6, 0, Math.PI * 2);
+            ctx.arc(28, -2, 6, 0, Math.PI * 2);
+            ctx.fill();
+            
             // Eyes
             ctx.fillStyle = 'black';
             ctx.beginPath();
             ctx.arc(14, -13, 3, 0, Math.PI * 2);
             ctx.arc(26, -13, 3, 0, Math.PI * 2);
             ctx.fill();
+            
             // Nose
             ctx.beginPath();
-            ctx.arc(20, -5, 2, 0, Math.PI * 2);
+            ctx.arc(20, -5, 2.5, 0, Math.PI * 2);
             ctx.fill();
+            
             // Smile
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.arc(20, 0, 4, 0.2, Math.PI - 0.2);
+            ctx.arc(20, 0, 6, 0.2, Math.PI - 0.2);
             ctx.stroke();
+            
             ctx.restore();
         }
+
+        // Initialize the game when the page loads
+        window.addEventListener('load', initGame);
     </script>
 </body>
 </html>
